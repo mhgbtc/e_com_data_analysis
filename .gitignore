@@ -1,0 +1,18 @@
+# Artefacts de compilation
+target/
+project/target/
+project/project/
+project/metals.sbt
+*.class
+
+# Outils et IDE
+.idea/
+.vscode/
+.bsp/
+.metals/
+.bloop/
+.scala-build/
+
+# Travail local
+_scratch/
+output/
