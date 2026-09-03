@@ -24,24 +24,35 @@
 ## 2. Charge de travail et difficultés par membre
 
 ### Membre A - DJIDOHOKPIN, Samuel
-- **Charge estimée** : ~13 h
+- **Charge estimée** : ~11 h
 - **Difficultés rencontrées** :
-  - Typage des sources hétérogènes en `Dataset[T]` : usage d'`Option` dans les case
-    classes pour absorber les valeurs manquantes sans faire échouer l'encodeur.
-  - Sous Windows, chargement de `hadoop.dll` (Hadoop 3.3.x) pour lire le répertoire
-    Parquet et écrire les résultats - résolu via `-Djava.library.path`.
-  - Conservation des lignes rejetées avec un motif (`rejection_reason`) plutôt que de
-    les supprimer.
+  - Typage des quatre sources hétérogènes en `Dataset[T]`. Les fichiers contiennent des
+    valeurs manquantes, or un `Double` ou un `Int` Scala ne peut pas valoir `null` :
+    l'encodeur échouait à la lecture. Résolu en déclarant les champs concernés en
+    `Option` dans les case classes.
+  - Schéma inféré de `merchants.csv` : Spark devine `establishment_date` comme un entier
+    alors que le sujet le décrit comme une chaîne `yyyyMMdd`. Il a fallu réaligner les
+    types après la lecture pour que la conversion en `Dataset[Merchant]` aboutisse.
+  - Sous Windows, Spark s'arrêtait sur `UnsatisfiedLinkError: NativeIO$Windows.access0`
+    dès la lecture du répertoire `products.parquet`. La cause n'était pas l'absence de
+    `winutils`, mais le fait que `C:\hadoop\bin` ne figurait pas dans le
+    `java.library.path` du JVM : `hadoop.dll` n'était donc jamais chargé. Résolu avec les
+    binaires Hadoop 3.3.6 et l'option `-Djava.library.path=C:\hadoop\bin`.
+  - Conservation des lignes rejetées avec leur motif plutôt que leur suppression. Deux
+    points ont demandé de l'attention : `concat_ws` ignore les valeurs nulles, ce qui
+    permet de reconnaître une ligne valide à une chaîne de motifs vide ; et chaque règle
+    doit commencer par `isNotNull`, sinon une comparaison portant sur une valeur nulle
+    renvoie `null` et non `false`, et la ligne échappe au filtre.
 
 ### Membre B - BALDÉ, Azizatou
-- **Charge estimée** : ~13 h
+- **Charge estimée** :
 - **Difficultés rencontrées** :
   - Rendre l'UDF robuste aux timestamps nuls, vides ou mal formés.
   - Calcul de l'"utilisateur actif" (>= 5 jours distincts sur une fenêtre glissante de
     7 jours) : passage par les couples `(user_id, jour)` distincts avant comptage.
 
 ### Membre C - DIALLO, Cheick Oumar
-- **Charge estimée** : ~13 h
+- **Charge estimée** :
 - **Difficultés rencontrées** :
   - Classements par catégorie et par région avec les fonctions de fenêtrage.
   - Calcul du `period_index` des cohortes via `months_between` sur des dates tronquées
@@ -80,10 +91,9 @@
 
 | Date | Module relu | Auteur | Relecteur | Remarques |
 |------|-------------|--------|-----------|-----------|
-| 2026-08-26 | Ingestion + validation (Partie 2) | Membre A | Membre B | Schémas explicites conformes ; motifs de rejet clairs. OK. |
-| 2026-08-27 | Transformations (Partie 3) | Membre B | Membre A | UDF robuste aux valeurs mal formées ; fenêtres correctes. OK. |
-| 2026-08-27 | Analytique (Partie 4) | Membre C | Membre B | KPI et cohortes cohérents avec les données. OK. |
-| 2026-08-28 | Optimisations + MainApp (Parties 5-6) | Membre C | Membres A et B | Cache/broadcast pilotés par la config ; arrêt propre de la session. OK. |
-| 2026-08-28 | Structure, build, config (Parties 1 et 7) | Membre A | Membre C | build.sbt et application.conf validés ; JAR généré. OK. |
-
-> Les champs entre ... (noms, charges, dates, remarques) sont à confirmer par le groupe.
+| * | Ingestion + validation (Partie 2) | Membre A | Membre B | * |
+| 2026-09-03 | Transformations (Partie 3) | Membre B | Membre A | UDF vérifiée sur chaîne nulle, vide et mal formée : elle renvoie `None` sans interrompre le job. Jointures à gauche cohérentes avec la conservation des transactions dont la référence est orpheline. Bon choix de `otherwise(null)` plutôt que `otherwise("Senior")` : un âge absent ne bascule pas à tort dans la tranche Senior. Libellé "Âge Moyen" identique à celui attendu par le pivot de la Partie 4, la colonne `ca_age_moyen` est bien alimentée. Pipeline complet relancé après fusion : 136 157 lignes enrichies. OK. |
+| * | Analytique (Partie 4) | Membre C | Membre B | * |
+| 2026-09-03 | Optimisations + MainApp (Parties 5-6) | Membre C | Membre A | `cache()` appliqué au bon endroit, sur le DataFrame enrichi réutilisé trois fois, et `unpersist()` appelé sur les deux chemins de sortie. Le `try / catch / finally` garantit bien `spark.stop()` même en cas d'échec. Deux réserves sans gravité : `persister()` (MEMORY_AND_DISK_SER) est défini mais jamais appelé, il faudra pouvoir le justifier devant le jury ; et l'étape `analytics` enchaîne directement sur l'écriture faute de branchement dédié, elle se comporte donc comme `all`. OK. |
+| * | Optimisations + MainApp (Parties 5-6) | Membre C | Membre B | * |
+| * | Structure, build, config (Parties 1 et 7) | Membre A | Membre C | * |
