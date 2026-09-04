@@ -36,6 +36,7 @@ object MainApp {
   }
 
   def main(args: Array[String]): Unit = {
+    val exitCode = 0
     val etape         = if (args.nonEmpty) args(0).toLowerCase else "all"
     val etapesValides = Set("ingestion", "transformation", "analytics", "all")
 
@@ -116,10 +117,12 @@ object MainApp {
       case e: Exception =>
         println(s"Échec du pipeline : ${e.getMessage}")
         e.printStackTrace()
+        exitCode = 1
     } finally {
       // Arrêt propre de la SparkSession dans tous les cas, y compris en cas d'échec.
       // Sans ça, le processus Java peut rester bloqué et les ressources non libérées.
       spark.stop()
     }
+    if (exitCode != 0) sys.exit(exitCode)
   }
 }

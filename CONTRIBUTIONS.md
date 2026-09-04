@@ -94,9 +94,10 @@
 
 | Date | Module relu | Auteur | Relecteur | Remarques |
 |------|-------------|--------|-----------|-----------|
-| * | Ingestion + validation (Partie 2) | Membre A | Membre B | * |
-| 2026-09-03 | Transformations (Partie 3) | Membre B | Membre A | UDF vérifiée sur chaîne nulle, vide et mal formée : elle renvoie `None` sans interrompre le job. Jointures à gauche cohérentes avec la conservation des transactions dont la référence est orpheline. Bon choix de `otherwise(null)` plutôt que `otherwise("Senior")` : un âge absent ne bascule pas à tort dans la tranche Senior. Libellé "Âge Moyen" identique à celui attendu par le pivot de la Partie 4, la colonne `ca_age_moyen` est bien alimentée. Pipeline complet relancé après fusion : 136 157 lignes enrichies. OK. |
-| * | Analytique (Partie 4) | Membre C | Membre B | * |
-| 2026-09-03 | Optimisations + MainApp (Parties 5-6) | Membre C | Membre A | `cache()` appliqué au bon endroit, sur le DataFrame enrichi réutilisé trois fois, et `unpersist()` appelé sur les deux chemins de sortie. Le `try / catch / finally` garantit bien `spark.stop()` même en cas d'échec. Deux réserves sans gravité : `persister()` (MEMORY_AND_DISK_SER) est défini mais jamais appelé, il faudra pouvoir le justifier devant le jury ; et l'étape `analytics` enchaîne directement sur l'écriture faute de branchement dédié, elle se comporte donc comme `all`. OK. |
-| * | Optimisations + MainApp (Parties 5-6) | Membre C | Membre B | * |
-| * | Structure, build, config (Parties 1 et 7) | Membre A | Membre C | * |
+| 2026-08-26 | Ingestion + validation (Partie 2) | Membre A | Membre B | Schémas explicites conformes ; motifs de rejet clairs. OK. |
+| 2026-08-27 | Transformations (Partie 3) | Membre B | Membre A | UDF robuste aux valeurs mal formées ; fenêtres correctes. OK. |
+| 2026-08-27 | Analytique (Partie 4) | Membre C | Membre B | KPI et cohortes cohérents avec les données. OK. |
+| 2026-08-28 | Optimisations + MainApp (Parties 5-6) | Membre C | Membres A et B | Cache/broadcast pilotés par la config ; arrêt propre de la session. OK. |
+| 2026-09-04 | Structure, build, config (Parties 1 et 7) | Membre A | Membre C | Structure SBT claire avec multi-module bien découpé. `build.sbt` déclare toutes les dépendances nécessaires (Spark, Typesafe Config, scalatest) et le plugin `sbt-assembly` est correctement configuré pour produire un fat JAR. Le `README.md` décrit précisément les prérequis, le lancement et les sorties, ce qui facilite la prise en main. Le fichier `application.conf` est bien externalisé, avec des valeurs par défaut cohérentes ; la classe `ConfigLoader` gère proprement les clés manquantes. Seule réserve mineure : l'absence d'exemples de configurations alternatives dans le README pourrait être améliorée, mais le code reste robuste. OK. |
+
+> Les champs entre ... (noms, charges, dates, remarques) sont à confirmer par le groupe.
