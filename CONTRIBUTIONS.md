@@ -45,10 +45,27 @@
     renvoie `null` et non `false`, et la ligne échappe au filtre.
 
 ### Membre B - BALDÉ, Azizatou
-- **Charge estimée** :
+- **Charge estimée** : ~12 h
 - **Difficultés rencontrées** :
-  - ...à compléter
-
+  - Robustesse de l'UDF `extractTimeFeatures` face aux timestamps invalides. Le sujet impose
+    que le job ne s'interrompe pas sur une donnée mal formée, or `LocalDateTime.parse` lève une
+    exception sur une chaîne nulle, vide ou non numérique. Résolu par un garde-fou placé avant
+    le parsing (`ts == null`, longueur différente de 14, présence de caractères non numériques)
+    qui renvoie `None`, doublé d'un `try/catch` renvoyant `None` en dernier recours. L'UDF
+    renvoie donc `Option[TimeFeatures]`, ce qui devient `null` côté Spark sans interrompre le
+    traitement.
+  - Calcul de l'"utilisateur actif" : au moins 5 jours distincts d'activité sur une fenêtre
+    glissante de 7 jours. Un `countDistinct` appliqué sur la fenêtre ne compile pas, Spark
+    n'autorisant pas les agrégats distincts dans une fonction de fenêtrage. Résolu en réduisant
+    d'abord la table aux couples `(user_id, event_date)` distincts — chaque ligne y vaut alors
+    exactement un jour actif — puis en comptant les lignes avec `count(lit(1))` sur une fenêtre
+    `rangeBetween` de 7 jours, le flag étant ensuite rattaché aux transactions par jointure sur
+    `(user_id, event_date)`.
+  - Tranche d'âge et valeurs manquantes. Un `otherwise("Senior")` dans `trancheAge` faisait
+    basculer à tort les âges absents (utilisateurs rejetés à la validation mais conservés par le
+    `left join`) dans la tranche Senior. Résolu en passant "Senior" en condition explicite
+    (`user_age >= 65`) et en utilisant `otherwise(null)`, afin qu'un âge manquant reste `null`
+    au lieu d'être classé.
 ### Membre C - DIALLO, Cheick Oumar
 - **Charge estimée** : ~ 13h
 - **Difficultés rencontrées** :
