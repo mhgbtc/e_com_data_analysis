@@ -24,7 +24,7 @@
 ## 2. Charge de travail et difficultés par membre
 
 ### Membre A - DJIDOHOKPIN, Samuel
-- **Charge estimée** : ~11 h
+- **Charge estimée** : ~14 h
 - **Difficultés rencontrées** :
   - Typage des quatre sources hétérogènes en `Dataset[T]`. Les fichiers contiennent des
     valeurs manquantes, or un `Double` ou un `Int` Scala ne peut pas valoir `null` :
@@ -47,16 +47,14 @@
 ### Membre B - BALDÉ, Azizatou
 - **Charge estimée** :
 - **Difficultés rencontrées** :
-  - Rendre l'UDF robuste aux timestamps nuls, vides ou mal formés.
-  - Calcul de l'"utilisateur actif" (>= 5 jours distincts sur une fenêtre glissante de
-    7 jours) : passage par les couples `(user_id, jour)` distincts avant comptage.
+  - ...à compléter
 
 ### Membre C - DIALLO, Cheick Oumar
 - **Charge estimée** : ~ 13h
 - **Difficultés rencontrées** :
-  - Classements par catégorie et par région avec les fonctions de fenêtrage : il a fallu définir correctement les partitions (`partitionBy` catégorie et région) et tris (`orderBy` chiffre d'affaires desc) pour la fonction `dense_rank()`, afin de gérer correctement les ex-æquo éventuels entre marchands.
-  - Calcul du `period_index` des cohortes via `months_between` sur des dates tronquées au mois : l'utilisation directe de `months_between` sur les timestamps complets créait des offsets de période (un écart de 30 jours n'étant pas toujours vu comme 1 mois). Résolu en tronquant d'abord les dates de transaction au premier du mois (`date_trunc("month")`) avant de calculer l'écart.
-  - Gestion du cache et du `unpersist()` : déterminer le moment optimal pour mettre en cache le DataFrame des transactions enrichies (qui est réutilisé pour les KPI marchands, les cohortes et l'écriture) sans saturer la mémoire, et s'assurer de libérer explicitement l'espace (`unpersist()`) une fois les trois usages terminés.
+  - Classements par catégorie et par région avec les fonctions de fenêtrage : il a fallu définir correctement les partitions (`partitionBy` catégorie et région) et tris (`orderBy` chiffre d'affaires desc) pour la fonction `rank()`, afin de gérer correctement les ex aequo éventuels entre marchands.
+  - Calcul du `period_index` des cohortes via `months_between` sur des dates tronquées au mois : l'utilisation directe de `months_between` sur les timestamps complets créait des offsets de période (un écart de 30 jours n'étant pas toujours vu comme 1 mois). Résolu en tronquant d'abord les dates de transaction au premier du mois (`trunc(col("event_date"), "month")`) avant de calculer l'écart.
+  - Gestion du cache et du `unpersist()` : déterminer le moment optimal pour conserver le DataFrame des transactions enrichies (qui est réutilisé pour les KPI marchands, les cohortes et l'écriture) sans saturer la mémoire, ce qui a conduit à le persister en mémoire et sur disque plutôt qu'à le mettre simplement en cache, et s'assurer de libérer explicitement l'espace (`unpersist()`) une fois les trois usages terminés.
   - Stratégie de Broadcast : identifier précisément quelles tables (merchants, users, products) étaient suffisamment petites pour justifier un `broadcast()` et éviter ainsi le shuffle réseau lors de la jointure avec le DataFrame des transactions, tout en s'assurant que cela ne provoque pas de OOM (OutOfMemory) sur le driver.
   - Orchestration globale et arrêt propre dans `MainApp.scala` : structurer le pipeline pour exécuter les étapes séquentiellement tout en garantissant que la `SparkSession` est bien arrêtée (`spark.stop()`) dans un bloc `finally`, même en cas d'exception lors de l'ingestion ou de la transformation.
   - Écriture simultanée en CSV et Parquet : gérer les contraintes d'écriture où le format CSV nécessite de regrouper les partitions (`coalesce(1)`) pour faciliter la lecture par l'équipe métier, tandis que le Parquet conserve la distribution pour une réutilisation Spark.
@@ -100,10 +98,9 @@
 
 | Date | Module relu | Auteur | Relecteur | Remarques |
 |------|-------------|--------|-----------|-----------|
-| 2026-08-26 | Ingestion + validation (Partie 2) | Membre A | Membre B | Schémas explicites conformes ; motifs de rejet clairs. OK. |
-| 2026-08-27 | Transformations (Partie 3) | Membre B | Membre A | UDF robuste aux valeurs mal formées ; fenêtres correctes. OK. |
-| 2026-08-27 | Analytique (Partie 4) | Membre C | Membre B | KPI et cohortes cohérents avec les données. OK. |
-| 2026-08-28 | Optimisations + MainApp (Parties 5-6) | Membre C | Membres A et B | Cache/broadcast pilotés par la config ; arrêt propre de la session. OK. |
-| 2026-09-04 | Structure, build, config (Parties 1 et 7) | Membre A | Membre C | Structure SBT claire avec multi-module bien découpé. `build.sbt` déclare toutes les dépendances nécessaires (Spark, Typesafe Config, scalatest) et le plugin `sbt-assembly` est correctement configuré pour produire un fat JAR. Le `README.md` décrit précisément les prérequis, le lancement et les sorties, ce qui facilite la prise en main. Le fichier `application.conf` est bien externalisé, avec des valeurs par défaut cohérentes ; la classe `ConfigLoader` gère proprement les clés manquantes. Seule réserve mineure : l'absence d'exemples de configurations alternatives dans le README pourrait être améliorée, mais le code reste robuste. OK. |
-
-> Les champs entre ... (noms, charges, dates, remarques) sont à confirmer par le groupe.
+| * | Ingestion + validation (Partie 2) | Membre A | Membre B | * |
+| 2026-09-03 | Transformations (Partie 3) | Membre B | Membre A | UDF vérifiée sur chaîne nulle, vide et mal formée : elle renvoie `None` sans interrompre le job. Jointures à gauche cohérentes avec la conservation des transactions dont la référence est orpheline. Bon choix de `otherwise(null)` plutôt que `otherwise("Senior")` : un âge absent ne bascule pas à tort dans la tranche Senior. Libellé "Âge Moyen" identique à celui attendu par le pivot de la Partie 4, la colonne `ca_age_moyen` est bien alimentée. Pipeline complet relancé après fusion : 136 157 lignes enrichies. OK. |
+| * | Analytique (Partie 4) | Membre C | Membre B | * |
+| 2026-09-03 | Optimisations + MainApp (Parties 5-6) | Membre C | Membre A | Le `try / catch / finally` garantit `spark.stop()` même en cas d'échec, et le code de sortie non nul a bien été ajouté. **Défaut bloquant relevé et corrigé** : `exitCode` était déclaré `val` puis réaffecté dans le `catch`, ce qui empêchait la compilation de tout le projet. Passé en `var`, `sbt compile` repasse au vert. **Écart avec la Question 5.1 relevé et comblé** : `persister()` existait mais n'était jamais appelé ; il porte désormais le DataFrame enrichi, le plus volumineux, tandis que `cache()` porte la matrice de cohortes, plus petite mais relue trois fois. `unpersist()` libère les deux en fin de pipeline. Réserve restante sans gravité : l'étape `analytics` n'a pas de branchement dédié, elle se comporte donc comme `all`. OK après corrections. |
+| * | Optimisations + MainApp (Parties 5-6) | Membre C | Membre B | * |
+| 2026-09-04 | Structure, build, config (Parties 1 et 7) | Membre A | Membre C | Structure SBT claire, découpée en paquets models, utils et analytics. `build.sbt` déclare toutes les dépendances nécessaires (Spark, Typesafe Config, scalatest) et le plugin `sbt-assembly` est correctement configuré pour produire un JAR d'assemblage sans Spark, celui-ci étant fourni par le cluster. Le `README.md` décrit précisément les prérequis, le lancement et les sorties, ce qui facilite la prise en main. Le fichier `application.conf` est bien externalisé, avec des valeurs par défaut cohérentes ; la classe `ConfigLoader` gère proprement les clés manquantes. Seule réserve mineure : l'absence d'exemples de configurations alternatives dans le README pourrait être améliorée, mais le code reste robuste. OK. |

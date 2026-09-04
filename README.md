@@ -75,16 +75,20 @@ Le JAR obtenu, `EcommerceAnalytics.jar` à la racine du projet, pèse environ 37
 ## 3. Exécution locale
 
 > **Affichage des accents sous Windows.** Les fichiers produits sont toujours corrects,
-> seul l'affichage console peut abîmer les accents (`dur|®e` au lieu de `durée`). Deux
+> seul l'affichage console peut abîmer les accents. Deux
 > réglages sont nécessaires :
 >
 > - le fichier `.jvmopts` à la racine force le JVM de SBT en UTF-8. Avec `fork`, c'est
 >   SBT qui relit la sortie de l'application, donc c'est lui qu'il faut régler ;
-> - la console elle-même, à basculer une fois par terminal :
+> - la console elle-même, à basculer une fois par terminal. Sous PowerShell, `chcp`
+>   seul ne suffit pas, il faut aussi forcer l'encodage de sortie :
 >
 > ```
-> chcp 65001
+> chcp 65001; [Console]::OutputEncoding = [Text.Encoding]::UTF8
 > ```
+>
+> Git Bash n'affiche pas correctement ces accents, malgré son support UTF-8 habituel.
+> Pour une démonstration, utilisez PowerShell avec la commande ci-dessus.
 
 ### 3.a Avec SBT
 

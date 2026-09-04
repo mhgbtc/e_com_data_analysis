@@ -36,7 +36,8 @@ object MainApp {
   }
 
   def main(args: Array[String]): Unit = {
-    val exitCode = 0
+    // var et non val : la valeur est réaffectée dans le catch en cas d'échec
+    var exitCode = 0
     val etape         = if (args.nonEmpty) args(0).toLowerCase else "all"
     val etapesValides = Set("ingestion", "transformation", "analytics", "all")
 
@@ -73,9 +74,12 @@ object MainApp {
       // Phase 2 : transformation
       val enrichi = chrono("transformation") {
         // Ce DataFrame sert trois fois ensuite (rapport marchands, cohortes,
-        // écriture) : sans cache, Spark recalculerait les jointures et les
+        // écriture) : sans conservation, Spark recalculerait les jointures et les
         // fenêtres à chaque action car il est paresseux.
-        val df = optim.mettreEnCache(transformation.transformer(valides))
+        // C'est le plus volumineux du pipeline, 136 157 lignes sur 38 colonnes :
+        // on le persiste en mémoire ET sur disque, sous forme sérialisée, pour ne
+        // pas dépendre de la seule mémoire disponible.
+        val df = optim.persister(transformation.transformer(valides))
         println("Échantillon du DataFrame enrichi :")
         df.select(
           "transaction_id", "user_id", "merchant_id", "merchant_name",
@@ -94,7 +98,9 @@ object MainApp {
         println("=== Rapport par marchand (top 10) ===")
         rapport.show(10, false)
 
-        val matrice = analytics.analyseCohortes(enrichi)
+        // Petite, mais relue trois fois : affichage, meilleure rétention, écriture.
+        // Le cache mémoire simple suffit ici.
+        val matrice = optim.mettreEnCache(analytics.analyseCohortes(enrichi))
         println("=== Matrice de rétention par cohorte (20 premières lignes) ===")
         matrice.show(20, false)
 
@@ -109,6 +115,7 @@ object MainApp {
       ecrire(rapportMarchands, s"${outputPath}rapport_marchands")
       ecrire(cohortes, s"${outputPath}cohortes")
       optim.liberer(enrichi)
+      optim.liberer(cohortes)
 
       println("=== Pipeline complet terminé avec succès ===")
 
