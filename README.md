@@ -31,22 +31,65 @@ Les quatre jeux de données se trouvent dans `src/main/resources/data/` :
 
 ## 2. Compilation et génération du JAR
 
-Depuis la racine du projet (`EcommerceAnalytics/`) :
+Spark n'est **pas** inclus dans le JAR : il est déclaré `Provided` dans `build.sbt`, car
+il est fourni par le cluster au moment du `spark-submit`. Cette portée écarte aussi toutes
+ses dépendances transitives (Arrow, Jackson, commons-logging...).
+
+### 2.a Avec SBT
 
 ```bash
-# Compiler
 sbt compile
-
-# Générer le JAR exécutable (fat JAR avec dépendances, via sbt-assembly)
-sbt assembly
-# => target/scala-2.12/EcommerceAnalytics.jar
 ```
+
+```bash
+sbt assembly
+```
+
+Le JAR est écrit dans `target/scala-2.12/EcommerceAnalytics.jar` et pèse environ 5,8 Mo.
+Il contient le code du projet, `application.conf`, Typesafe Config et la bibliothèque
+Scala.
+
+### 2.b Avec scala-cli, sans installer SBT
+
+C'est la méthode utilisée par le groupe.
+
+Le JAR ne doit contenir que `application.conf`, pas les jeux de données : ceux-ci sont
+lus sur le disque, aux chemins déclarés dans la configuration. On prépare donc un dossier
+de ressources réduit, dans `target/` qui est ignoré par Git.
+
+```bash
+mkdir -p target/pkg-resources && cp src/main/resources/application.conf target/pkg-resources/
+```
+
+```bash
+scala-cli --power package src/main/scala -S 2.12.15 --jvm temurin:11 --dep org.apache.spark::spark-sql:3.3.0 --dep com.typesafe:config:1.4.2 --resource-dir target/pkg-resources --main-class com.ecommerce.analytics.MainApp --assembly --provided org.apache.spark::spark-sql --preamble=false -o EcommerceAnalytics.jar -f --server=false
+```
+
+Le JAR obtenu, `EcommerceAnalytics.jar` à la racine du projet, pèse environ 370 Ko.
+
+> Ce JAR n'est pas exécutable seul avec `java -jar` : la bibliothèque Scala et Spark en
+> sont absents volontairement. Il se lance avec `spark-submit` (section 4).
 
 ---
 
 ## 3. Exécution locale
 
+> **Affichage des accents sous Windows.** Les fichiers produits sont toujours corrects,
+> seul l'affichage console peut abîmer les accents (`dur|®e` au lieu de `durée`). Deux
+> réglages sont nécessaires :
+>
+> - le fichier `.jvmopts` à la racine force le JVM de SBT en UTF-8. Avec `fork`, c'est
+>   SBT qui relit la sortie de l'application, donc c'est lui qu'il faut régler ;
+> - la console elle-même, à basculer une fois par terminal :
+>
+> ```
+> chcp 65001
+> ```
+
 ### 3.a Avec SBT
+
+L'option Windows `java.library.path` est déjà déclarée dans `build.sbt`, il n'y a donc
+rien à ajouter sur la ligne de commande.
 
 ```bash
 # Pipeline complet
@@ -70,6 +113,7 @@ scala-cli run src/main/scala \
   --dep com.typesafe:config:1.4.2 \
   --resource-dir src/main/resources \
   --java-opt '-Djava.library.path=C:\hadoop\bin' \
+  --java-opt '-Dfile.encoding=UTF-8' \
   --server=false -- all
 ```
 
@@ -89,7 +133,7 @@ spark-submit \
   --class com.ecommerce.analytics.MainApp \
   --master yarn \
   --deploy-mode cluster \
-  target/scala-2.12/EcommerceAnalytics.jar all
+  EcommerceAnalytics.jar all
 ```
 
 En local avec le JAR :
@@ -98,7 +142,7 @@ En local avec le JAR :
 spark-submit \
   --class com.ecommerce.analytics.MainApp \
   --master "local[*]" \
-  target/scala-2.12/EcommerceAnalytics.jar all
+  EcommerceAnalytics.jar all
 ```
 
 L'argument final (`ingestion` | `transformation` | `analytics` | `all`) sélectionne

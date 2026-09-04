@@ -1,4 +1,4 @@
-# Journal de contribution - Groupe 3
+# Journal de contribution - Groupe 7
 
 ## 1. Tableau récapitulatif : question -> responsable -> relecteur
 
@@ -83,9 +83,15 @@
    seuil de validation ou paramètre Spark n'est codé en dur ; `ConfigLoader` renvoie une
    valeur par défaut si une clé est absente, ce qui rend le projet robuste et paramétrable.
 
-6. **JAR exécutable via `sbt-assembly` (fat JAR).** Un JAR unique contenant les dépendances
-   simplifie l'exécution locale (`java -jar`) et le déploiement `spark-submit`, sans gérer
-   un classpath externe.
+6. **JAR d'assemblage sans Spark, exécuté via `spark-submit`.** Le sujet laisse le choix
+   entre `assembly` et `package`. Nous avons retenu un JAR d'assemblage contenant le code
+   du projet, `application.conf` et Typesafe Config, mais **pas** Spark, déclaré comme
+   fourni. Spark est en effet apporté par le cluster au moment du `spark-submit` :
+   l'embarquer porterait le livrable à environ 250 Mo et rendrait l'archive impossible à
+   envoyer par courriel. Le JAR final pèse 369 Ko. Dans `build.sbt`, Spark est déclaré
+   `Provided` : `sbt assembly` produit alors un JAR de 5,8 Mo, débarrassé de Spark et de
+   toutes ses dépendances transitives. La tâche `run` y est redéfinie pour utiliser le
+   classpath de compilation, ce qui permet à `sbt run` de fonctionner malgré cette portée.
 
 ## 4. Relectures croisées (chaque module relu par un autre membre)
 

@@ -1,4 +1,4 @@
-# Équipe - Projet Final Spark & Scala (Groupe 3)
+# Équipe - Projet Final Spark & Scala (Groupe 7)
 
 Dépôt : https://github.com/mhgbtc/e_com_data_analysis
 
@@ -11,7 +11,7 @@ travail ; le groupe reste responsable de l'intégration et de la cohérence de l
 |--------|-------------|----------------|------|------------------------|
 | **A** | DJIDOHOKPIN, Samuel | msd.bytes@gmail.com | Data Ingestion & Platform Engineer | Samuel DJIDOHOKPIN |
 | **B** | BALDÉ, Azizatou | baldeazizatou@gmail.com | Data Transformation Engineer | Azizatou BALDE |
-| **C** | DIALLO, Cheick Oumar | cheickoumardiallo990@gmail.com | Analytics & Performance Engineer | Cheick Oumar DIALLO |
+| **C** | DIALLO, Cheick Oumar | cheickoumardiallo990@gmail.com | Analytics & Performance Engineer | Cheick-o-diallo |
 
 > Rôles imposés par le sujet (Partie 0.1). Un même rôle ne peut pas être occupé par deux personnes.
 
