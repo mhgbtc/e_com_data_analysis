@@ -57,8 +57,8 @@
   - Calcul de l'"utilisateur actif" : au moins 5 jours distincts d'activité sur une fenêtre
     glissante de 7 jours. Un `countDistinct` appliqué sur la fenêtre ne compile pas, Spark
     n'autorisant pas les agrégats distincts dans une fonction de fenêtrage. Résolu en réduisant
-    d'abord la table aux couples `(user_id, event_date)` distincts — chaque ligne y vaut alors
-    exactement un jour actif — puis en comptant les lignes avec `count(lit(1))` sur une fenêtre
+    d'abord la table aux couples `(user_id, event_date)` distincts, chaque ligne y valant alors
+    exactement un jour actif, puis en comptant les lignes avec `count(lit(1))` sur une fenêtre
     `rangeBetween` de 7 jours, le flag étant ensuite rattaché aux transactions par jointure sur
     `(user_id, event_date)`.
   - Tranche d'âge et valeurs manquantes. Un `otherwise("Senior")` dans `trancheAge` faisait
@@ -67,7 +67,7 @@
     (`user_age >= 65`) et en utilisant `otherwise(null)`, afin qu'un âge manquant reste `null`
     au lieu d'être classé.
 ### Membre C - DIALLO, Cheick Oumar
-- **Charge estimée** : ~ 13h
+- **Charge estimée** : ~13 h
 - **Difficultés rencontrées** :
   - Classements par catégorie et par région avec les fonctions de fenêtrage : il a fallu définir correctement les partitions (`partitionBy` catégorie et région) et tris (`orderBy` chiffre d'affaires desc) pour la fonction `rank()`, afin de gérer correctement les ex aequo éventuels entre marchands.
   - Calcul du `period_index` des cohortes via `months_between` sur des dates tronquées au mois : l'utilisation directe de `months_between` sur les timestamps complets créait des offsets de période (un écart de 30 jours n'étant pas toujours vu comme 1 mois). Résolu en tronquant d'abord les dates de transaction au premier du mois (`trunc(col("event_date"), "month")`) avant de calculer l'écart.
@@ -115,7 +115,7 @@
 
 | Date | Module relu | Auteur | Relecteur | Remarques |
 |------|-------------|--------|-----------|-----------|
-| 2026-09-04 | Ingestion + validation (Partie 2) | Membre A | Membre B | Code clair. Les schémas sont définis explicitement et les chemins viennent de la config, pas codés en dur. La validation est bien pensée : une liste de règles avec le motif de rejet, et les lignes rejetées sont conservées avec leur raison au lieu d'être supprimées. Seule remarque : merchants est lu avec inferSchema alors que les autres sources ont un schéma explicite, ce serait plus cohérent de faire pareil. Rien de bloquant, OK. |
+| 2026-09-04 | Ingestion + validation (Partie 2) | Membre A | Membre B | Code clair. Les schémas sont définis explicitement et les chemins viennent de la config, pas codés en dur. La validation est bien pensée : une liste de règles avec le motif de rejet, et les lignes rejetées sont conservées avec leur raison au lieu d'être supprimées. Seule remarque : merchants est lu avec inferSchema alors que les autres sources ont un schéma explicite. Vérification faite, c'est le sujet qui l'impose à la Question 2.1, et le code réaligne ensuite les types car l'inférence transforme establishment_date en entier. Rien de bloquant, OK. |
 | 2026-09-03 | Transformations (Partie 3) | Membre B | Membre A | UDF vérifiée sur chaîne nulle, vide et mal formée : elle renvoie `None` sans interrompre le job. Jointures à gauche cohérentes avec la conservation des transactions dont la référence est orpheline. Bon choix de `otherwise(null)` plutôt que `otherwise("Senior")` : un âge absent ne bascule pas à tort dans la tranche Senior. Libellé "Âge Moyen" identique à celui attendu par le pivot de la Partie 4, la colonne `ca_age_moyen` est bien alimentée. Pipeline complet relancé après fusion : 136 157 lignes enrichies. OK. |
 | 2026-09-04 | Analytique (Partie 4) | Membre C | Membre B | Les KPI par marchand sont complets (CA, nombre de transactions, clients uniques, panier moyen, commission). Les classements par catégorie et par région utilisent rank(), ce qui gère bien les égalités. Bon point : le pivot par tranche d'âge reprend exactement mes libellés (Jeune, Adulte, Âge Moyen, Senior), donc ça s'emboîte bien avec ma partie. Pour les cohortes, les dates sont arrondies au mois avant de calculer l'écart, sinon le period_index serait faux. Rien de bloquant, OK. |
 | 2026-09-03 | Optimisations + MainApp (Parties 5-6) | Membre C | Membre A | Le `try / catch / finally` garantit `spark.stop()` même en cas d'échec, et le code de sortie non nul a bien été ajouté. **Défaut bloquant relevé et corrigé** : `exitCode` était déclaré `val` puis réaffecté dans le `catch`, ce qui empêchait la compilation de tout le projet. Passé en `var`, `sbt compile` repasse au vert. **Écart avec la Question 5.1 relevé et comblé** : `persister()` existait mais n'était jamais appelé ; il porte désormais le DataFrame enrichi, le plus volumineux, tandis que `cache()` porte la matrice de cohortes, plus petite mais relue trois fois. `unpersist()` libère les deux en fin de pipeline. Réserve restante sans gravité : l'étape `analytics` n'a pas de branchement dédié, elle se comporte donc comme `all`. OK après corrections. |
