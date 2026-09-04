@@ -24,28 +24,42 @@
 ## 2. Charge de travail et difficultés par membre
 
 ### Membre A - DJIDOHOKPIN, Samuel
-- **Charge estimée** : ~13 h
+- **Charge estimée** : ~11 h
 - **Difficultés rencontrées** :
-  - Typage des sources hétérogènes en `Dataset[T]` : usage d'`Option` dans les case
-    classes pour absorber les valeurs manquantes sans faire échouer l'encodeur.
-  - Sous Windows, chargement de `hadoop.dll` (Hadoop 3.3.x) pour lire le répertoire
-    Parquet et écrire les résultats - résolu via `-Djava.library.path`.
-  - Conservation des lignes rejetées avec un motif (`rejection_reason`) plutôt que de
-    les supprimer.
+  - Typage des quatre sources hétérogènes en `Dataset[T]`. Les fichiers contiennent des
+    valeurs manquantes, or un `Double` ou un `Int` Scala ne peut pas valoir `null` :
+    l'encodeur échouait à la lecture. Résolu en déclarant les champs concernés en
+    `Option` dans les case classes.
+  - Schéma inféré de `merchants.csv` : Spark devine `establishment_date` comme un entier
+    alors que le sujet le décrit comme une chaîne `yyyyMMdd`. Il a fallu réaligner les
+    types après la lecture pour que la conversion en `Dataset[Merchant]` aboutisse.
+  - Sous Windows, Spark s'arrêtait sur `UnsatisfiedLinkError: NativeIO$Windows.access0`
+    dès la lecture du répertoire `products.parquet`. La cause n'était pas l'absence de
+    `winutils`, mais le fait que `C:\hadoop\bin` ne figurait pas dans le
+    `java.library.path` du JVM : `hadoop.dll` n'était donc jamais chargé. Résolu avec les
+    binaires Hadoop 3.3.6 et l'option `-Djava.library.path=C:\hadoop\bin`.
+  - Conservation des lignes rejetées avec leur motif plutôt que leur suppression. Deux
+    points ont demandé de l'attention : `concat_ws` ignore les valeurs nulles, ce qui
+    permet de reconnaître une ligne valide à une chaîne de motifs vide ; et chaque règle
+    doit commencer par `isNotNull`, sinon une comparaison portant sur une valeur nulle
+    renvoie `null` et non `false`, et la ligne échappe au filtre.
 
 ### Membre B - BALDÉ, Azizatou
-- **Charge estimée** : ~13 h
+- **Charge estimée** :
 - **Difficultés rencontrées** :
   - Rendre l'UDF robuste aux timestamps nuls, vides ou mal formés.
   - Calcul de l'"utilisateur actif" (>= 5 jours distincts sur une fenêtre glissante de
     7 jours) : passage par les couples `(user_id, jour)` distincts avant comptage.
 
 ### Membre C - DIALLO, Cheick Oumar
-- **Charge estimée** : ~13 h
+- **Charge estimée** : ~ 13h
 - **Difficultés rencontrées** :
-  - Classements par catégorie et par région avec les fonctions de fenêtrage.
-  - Calcul du `period_index` des cohortes via `months_between` sur des dates tronquées
-    au mois.
+  - Classements par catégorie et par région avec les fonctions de fenêtrage : il a fallu définir correctement les partitions (`partitionBy` catégorie et région) et tris (`orderBy` chiffre d'affaires desc) pour la fonction `dense_rank()`, afin de gérer correctement les ex-æquo éventuels entre marchands.
+  - Calcul du `period_index` des cohortes via `months_between` sur des dates tronquées au mois : l'utilisation directe de `months_between` sur les timestamps complets créait des offsets de période (un écart de 30 jours n'étant pas toujours vu comme 1 mois). Résolu en tronquant d'abord les dates de transaction au premier du mois (`date_trunc("month")`) avant de calculer l'écart.
+  - Gestion du cache et du `unpersist()` : déterminer le moment optimal pour mettre en cache le DataFrame des transactions enrichies (qui est réutilisé pour les KPI marchands, les cohortes et l'écriture) sans saturer la mémoire, et s'assurer de libérer explicitement l'espace (`unpersist()`) une fois les trois usages terminés.
+  - Stratégie de Broadcast : identifier précisément quelles tables (merchants, users, products) étaient suffisamment petites pour justifier un `broadcast()` et éviter ainsi le shuffle réseau lors de la jointure avec le DataFrame des transactions, tout en s'assurant que cela ne provoque pas de OOM (OutOfMemory) sur le driver.
+  - Orchestration globale et arrêt propre dans `MainApp.scala` : structurer le pipeline pour exécuter les étapes séquentiellement tout en garantissant que la `SparkSession` est bien arrêtée (`spark.stop()`) dans un bloc `finally`, même en cas d'exception lors de l'ingestion ou de la transformation.
+  - Écriture simultanée en CSV et Parquet : gérer les contraintes d'écriture où le format CSV nécessite de regrouper les partitions (`coalesce(1)`) pour faciliter la lecture par l'équipe métier, tandis que le Parquet conserve la distribution pour une réutilisation Spark.
 
 ## 3. Décisions techniques du groupe
 
