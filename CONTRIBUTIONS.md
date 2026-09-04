@@ -84,6 +84,6 @@
 | 2026-08-27 | Transformations (Partie 3) | Membre B | Membre A | UDF robuste aux valeurs mal formées ; fenêtres correctes. OK. |
 | 2026-08-27 | Analytique (Partie 4) | Membre C | Membre B | KPI et cohortes cohérents avec les données. OK. |
 | 2026-08-28 | Optimisations + MainApp (Parties 5-6) | Membre C | Membres A et B | Cache/broadcast pilotés par la config ; arrêt propre de la session. OK. |
-| 2026-08-28 | Structure, build, config (Parties 1 et 7) | Membre A | Membre C | build.sbt et application.conf validés ; JAR généré. OK. |
+| 2026-09-04 | Structure, build, config (Parties 1 et 7) | Membre A | Membre C | Structure SBT claire, `build.sbt` et `sbt-assembly` bien configurés. `README.md` complet, `application.conf` et `ConfigLoader` robustes (valeurs par défaut bien gérées). Point soulevé en relecture sur `MainApp` : en cas d'exception (ex: IOException à l'écriture), le `catch` affiche l'erreur mais le programme se termine avec le code de sortie 0, ce qui est trompeur pour un ordonnanceur externe. Proposition de correction (non bloquante mais à appliquer avant le rendu) : utiliser une `var codeSortie = 0`, passer à `1` dans le `catch`, placer `spark.stop()` dans le `finally` (et non dans le `catch` pour éviter de sauter le nettoyage), puis appeler `sys.exit(codeSortie)` après le bloc `try/catch/finally`. Rien d'autre à redire. OK. |
 
 > Les champs entre ... (noms, charges, dates, remarques) sont à confirmer par le groupe.
